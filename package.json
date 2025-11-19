@@ -1,0 +1,31 @@
+{
+  "name": "cloudflared-proxy",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Simple HTTP proxy for Cloudflare Access protected resources",
+  "author": "Kevin Deems <kevin8deems@gmail.com>",
+  "type": "commonjs",
+  "scripts": {
+    "proxy": "tsx cloudflared.ts",
+    "start": "tsx cloudflared.ts",
+    "dev": "tsx --watch cloudflared.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "f": "pnpm format",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.0",
+    "prettier": "^3.6.2",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.10"
+  },
+  "packageManager": "pnpm@10.20.0",
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": "^10.20.0"
+  }
+}

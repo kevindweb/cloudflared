@@ -1,0 +1,5 @@
+{
+  "port": 1111,
+  "retryCount": 2,
+  "cacheTimeoutMs": 3600000
+}
