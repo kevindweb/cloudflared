@@ -5,11 +5,10 @@
 
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
-import { Config, JSON_HEADER } from "./cloudflared";
+import { Config, JSON_HEADER } from "./cloudflared.js";
 
 // Import the functions we want to test by extracting them
 // Since the main file runs immediately, we'll need to extract testable parts
-
 
 interface Dependencies {
   fetch: typeof fetch;
@@ -30,7 +29,10 @@ try {
 
 // Mock implementations for testing
 const mockDeps: Dependencies = {
-  fetch: async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
+  fetch: async (
+    input: string | URL | Request,
+    _init?: RequestInit
+  ): Promise<Response> => {
     // Mock fetch that can simulate different scenarios
     let urlStr: string;
     if (typeof input === "string") {
@@ -40,21 +42,21 @@ const mockDeps: Dependencies = {
     } else {
       urlStr = input.url;
     }
-    
+
     if (urlStr.includes("500-error")) {
       return new Response("Server Error", { status: 500 });
     }
-    
+
     if (urlStr.includes("success")) {
       return new Response(JSON.stringify({ message: "success" }), {
         status: 200,
         headers: { "content-type": JSON_HEADER },
       });
     }
-    
+
     return new Response("Not Found", { status: 404 });
   },
-  
+
   execCommand: async (command: string): Promise<string> => {
     // Mock cloudflared commands
     if (command.includes("access token")) {
@@ -89,15 +91,15 @@ async function fetchWithRetry(
   deps: Dependencies
 ): Promise<Response> {
   let lastError: Error | null = null;
-  
+
   for (let attempt = 0; attempt <= config.retryCount; attempt++) {
     try {
       const response = await deps.fetch(url, init);
-      
+
       if (response.status >= 500 && attempt < config.retryCount) {
         continue;
       }
-      
+
       return response;
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
@@ -106,7 +108,7 @@ async function fetchWithRetry(
       }
     }
   }
-  
+
   throw lastError || new Error("Request failed after retries");
 }
 
@@ -129,7 +131,9 @@ describe("Cloudflared Proxy", () => {
     });
 
     it("should handle URLs with query parameters", () => {
-      const result = extractUrl({ url: "/curl?url=https://example.com/api?param=value" });
+      const result = extractUrl({
+        url: "/curl?url=https://example.com/api?param=value",
+      });
       expect(result).toBe("https://example.com/api?param=value");
     });
 
@@ -141,29 +145,43 @@ describe("Cloudflared Proxy", () => {
 
   describe("Retry Logic", () => {
     it("should succeed on first try for 200 response", async () => {
-      const response = await fetchWithRetry("https://example.com/success", {}, mockDeps);
+      const response = await fetchWithRetry(
+        "https://example.com/success",
+        {},
+        mockDeps
+      );
       expect(response.status).toBe(200);
     });
 
     it("should return 500 after retries exhausted", async () => {
-      const response = await fetchWithRetry("https://example.com/500-error", {}, mockDeps);
+      const response = await fetchWithRetry(
+        "https://example.com/500-error",
+        {},
+        mockDeps
+      );
       expect(response.status).toBe(500);
     });
   });
 
   describe("Command Execution", () => {
     it("should return mock token for valid token command", async () => {
-      const token = await mockDeps.execCommand('cloudflared access token "https://example.com"');
+      const token = await mockDeps.execCommand(
+        'cloudflared access token "https://example.com"'
+      );
       expect(token).toBe("mock-token-12345");
     });
 
     it("should handle login commands", async () => {
-      const result = await mockDeps.execCommand('cloudflared access login "https://example.com"');
+      const result = await mockDeps.execCommand(
+        'cloudflared access login "https://example.com"'
+      );
       expect(result).toBe("Login successful");
     });
 
     it("should throw for unknown commands", async () => {
-      await expect(mockDeps.execCommand("unknown command")).rejects.toThrow("Unknown command");
+      await expect(mockDeps.execCommand("unknown command")).rejects.toThrow(
+        "Unknown command"
+      );
     });
   });
 });
