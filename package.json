@@ -4,7 +4,7 @@
   "private": true,
   "description": "Simple HTTP proxy for Cloudflare Access protected resources",
   "author": "Kevin Deems <kevin8deems@gmail.com>",
-  "type": "commonjs",
+  "type": "module",
   "scripts": {
     "proxy": "tsx cloudflared.ts",
     "start": "tsx cloudflared.ts",
