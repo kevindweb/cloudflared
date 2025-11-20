@@ -1,5 +1,6 @@
 #!/usr/bin/env tsx
-import * as http from "node:http";
+import { createServer } from "node:http";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import { readFileSync } from "node:fs";
@@ -27,6 +28,14 @@ try {
 
 export const JSON_HEADER = "application/json";
 const TEXT_HEADER = "text/plain";
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers":
+    "Content-Type, Authorization, X-Requested-With",
+};
+const API_PROXY_PATH = "/curl";
+const API_HEALTH_PATH = "/health";
 
 // Token cache to avoid repeated cloudflared calls
 const tokenCache = new Map<string, { token: string; expiresAt: number }>();
@@ -42,7 +51,7 @@ const defaultDeps: Dependencies = {
   execCommand: async (command: string): Promise<string> => {
     const { stdout, stderr } = await execAsync(command, {});
     if (stderr) {
-      throw new Error(`Command stderr: ${stderr}`);
+      throw new Error(`Command failed: "${command}". Stderr: ${stderr}`);
     }
     return stdout.trim();
   },
@@ -84,44 +93,70 @@ async function getAccessToken(
 }
 
 /**
- * Parse request body from stream
+ * Parse request body from stream using Buffers for performance
+ * and encoding safety.
  */
-async function parseBody(req: http.IncomingMessage): Promise<string> {
+async function parseBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
-    let body = "";
-    req.on("data", (chunk) => (body += chunk.toString()));
-    req.on("end", () => resolve(body));
+    const bodyChunks: Buffer[] = [];
+
+    req.on("data", (chunk) => {
+      if (chunk instanceof Buffer) {
+        bodyChunks.push(chunk);
+      } else {
+        bodyChunks.push(Buffer.from(chunk));
+      }
+    });
+
+    req.on("end", () => {
+      try {
+        const bodyBuffer = Buffer.concat(bodyChunks);
+        resolve(bodyBuffer.toString("utf8"));
+      } catch (error) {
+        reject(new Error("Failed to process request body."));
+      }
+    });
+
     req.on("error", reject);
   });
 }
 
 /**
- * Extract target URL from request
+ * Extract target URL from request, ensuring it is well-formed and uses a safe protocol.
  */
-function extractUrl(req: http.IncomingMessage): string | null {
+function extractUrl(req: IncomingMessage): string | null {
   if (!req.url) return null;
 
   const fullUrl = new URL(req.url, `http://localhost:${config.port}`);
-  const targetUrl = fullUrl.searchParams.get("url");
+  let targetUrl = fullUrl.searchParams.get("url");
+  if (targetUrl) {
+    try {
+      const url = new URL(targetUrl);
+      if (url.protocol !== "http:" && url.protocol !== "https:") {
+        console.error(`Attempted proxy to forbidden protocol: ${url.protocol}`);
+        return null;
+      }
 
-  if (!targetUrl && req.url) {
-    const match = req.url.match(/\/curl\?url=(.+)/);
-    return match && match[1] ? decodeURIComponent(match[1]) : null;
+      if (!targetUrl.includes("?") && targetUrl.includes("&")) {
+        // replace the first & with ?
+        targetUrl = targetUrl.replace("&", "?");
+      }
+      return targetUrl;
+    } catch (e) {
+      console.error(`Malformed target URL provided: ${targetUrl} (${e})`);
+      return null;
+    }
   }
 
-  return targetUrl;
+  return null;
 }
 
 /**
  * Send error response
  */
-function sendError(
-  res: http.ServerResponse,
-  status: number,
-  message: string
-): void {
+function sendError(res: ServerResponse, status: number, message: string): void {
   console.error(`❌ Error (${status}): ${message}`);
-  res.writeHead(status, { "Content-Type": JSON_HEADER });
+  res.writeHead(status, { "Content-Type": JSON_HEADER, ...CORS_HEADERS });
   res.end(JSON.stringify({ error: message }));
 }
 
@@ -166,8 +201,8 @@ async function fetchWithRetry(
  * Handle proxy requests
  */
 async function handleRequest(
-  req: http.IncomingMessage,
-  res: http.ServerResponse,
+  req: IncomingMessage,
+  res: ServerResponse,
   deps: Dependencies = defaultDeps
 ): Promise<void> {
   try {
@@ -197,7 +232,11 @@ async function handleRequest(
     };
 
     // Add body for POST/PUT requests
-    if (req.method === "POST" || req.method === "PUT") {
+    if (
+      req.method === "POST" ||
+      req.method === "PUT" ||
+      req.method === "PATCH"
+    ) {
       init.body = await parseBody(req);
       if (!headers.has("content-type")) {
         headers.set("Content-Type", JSON_HEADER);
@@ -209,7 +248,7 @@ async function handleRequest(
 
     res.writeHead(response.status, {
       "Content-Type": response.headers.get("content-type") || JSON_HEADER,
-      "Access-Control-Allow-Origin": "*",
+      ...CORS_HEADERS,
     });
     res.end(responseText);
   } catch (error) {
@@ -221,7 +260,7 @@ async function handleRequest(
 /**
  * Handle health check endpoint
  */
-function handleHealth(res: http.ServerResponse): void {
+function handleHealth(res: ServerResponse): void {
   const healthData = {
     status: "healthy",
     timestamp: new Date().toISOString(),
@@ -237,21 +276,32 @@ function handleHealth(res: http.ServerResponse): void {
 
   res.writeHead(200, {
     "Content-Type": JSON_HEADER,
-    "Access-Control-Allow-Origin": "*",
+    ...CORS_HEADERS,
   });
   res.end(JSON.stringify(healthData, null, 2));
 }
 
 /**
+ * Handle CORS preflight requests
+ */
+function handleCorsPreFlight(res: ServerResponse): void {
+  res.writeHead(200, CORS_HEADERS);
+  res.end();
+}
+
+/**
  * Main request handler
  */
-function requestListener(
-  req: http.IncomingMessage,
-  res: http.ServerResponse
-): void {
-  if (req.url?.startsWith("/curl")) {
+function requestListener(req: IncomingMessage, res: ServerResponse): void {
+  // Handle CORS preflight requests
+  if (req.method === "OPTIONS") {
+    console.log("🔄 Handling CORS preflight request");
+    return handleCorsPreFlight(res);
+  }
+
+  if (req.url?.startsWith(API_PROXY_PATH)) {
     void handleRequest(req, res);
-  } else if (req.url === "/health") {
+  } else if (req.url === API_HEALTH_PATH) {
     handleHealth(res);
   } else {
     res.writeHead(404, { "Content-Type": TEXT_HEADER });
@@ -260,7 +310,7 @@ function requestListener(
 }
 
 // Start server
-const server = http.createServer(requestListener);
+const server = createServer(requestListener);
 
 server.listen(config.port, () => {
   console.log(
