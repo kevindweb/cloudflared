@@ -1,18 +1,20 @@
 # Cloudflared Proxy
 
-A simple HTTP proxy that makes it easy to access Cloudflare Access protected resources from your local development environment.
+A simple HTTP proxy that makes it easy to access Cloudflare Access protected resources from your local development environment. It eliminates the need for manual authentication by automatically managing token fetching, caching, and refresh using the `cloudflared` CLI.
 
-## Why This Exists
+## Motivation
 
 When developing locally, you often need to access APIs or resources that are protected by Cloudflare Access. Normally, you'd have to:
 
-1. Manually authenticate through the browser
-2. Extract tokens and headers
+1. Manually authenticate through the browser or via [cloudflared CLI](https://developers.cloudflare.com/cloudflare-one/tutorials/cli/)
+2. Extract authentication tokens and headers
 3. Include them in every API request
 
-This proxy eliminates that friction. Just run it in the background and make requests to `localhost:1111/curl?url=<your-protected-resource>` - the proxy handles all the Cloudflare Access authentication automatically.
+This proxy eliminates that friction. Just run it in the background and make requests to `localhost:1111/curl?url=<your-protected-resource>` - the proxy handles all the Cloudflare Access authentication automatically, without having to pass any headers.
 
 ## Quick Start
+
+Requires first installing [cloudflared](https://github.com/cloudflare/cloudflared?tab=readme-ov-file#installing-cloudflared).
 
 ```bash
 # Install dependencies
@@ -88,7 +90,6 @@ Create a `config.json` file to customize settings:
 - **port**: Server port (default: 1111)
 - **retryCount**: Number of retries for 5xx errors (default: 2)
 - **cacheTimeoutMs**: Token cache duration in milliseconds (default: 1 hour)
-- **maxBufferSize**: Maximum command output buffer size (default: 20MB)
 
 ## Development
 
@@ -111,3 +112,7 @@ pnpm test
 # Run tests in watch mode
 pnpm test:watch
 ```
+
+## Contribution
+
+We welcome contributions! Please feel free to submit issues or pull requests on GitHub.
