@@ -77,7 +77,7 @@ function extractUrl(req: { url?: string }): string | null {
   const targetUrl = fullUrl.searchParams.get("url");
 
   if (!targetUrl && req.url) {
-    const match = req.url.match(/\/curl\?url=(.+)/);
+    const match = req.url.match(/\/curl\/(.+)/);
     return match && match[1] ? decodeURIComponent(match[1]) : null;
   }
 
@@ -124,15 +124,18 @@ describe("Cloudflared Proxy", () => {
     });
   });
 
+  // These are useless, they don't exercise the actual code, just a
+  // copypasta version of it that doesn't even match the real one
+  // any more.
   describe("URL Extraction", () => {
     it("should extract URL from query parameter", () => {
-      const result = extractUrl({ url: "/curl?url=https://example.com" });
+      const result = extractUrl({ url: "/curl/https://example.com" });
       expect(result).toBe("https://example.com");
     });
 
     it("should handle URLs with query parameters", () => {
       const result = extractUrl({
-        url: "/curl?url=https://example.com/api?param=value",
+        url: "/curl/https://example.com/api?param=value",
       });
       expect(result).toBe("https://example.com/api?param=value");
     });

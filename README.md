@@ -10,7 +10,7 @@ When developing locally, you often need to access APIs or resources that are pro
 2. Extract authentication tokens and headers
 3. Include them in every API request
 
-This proxy eliminates that friction. Just run it in the background and make requests to `localhost:1111/curl?url=<your-protected-resource>` - the proxy handles all the Cloudflare Access authentication automatically, without having to pass any headers.
+This proxy eliminates that friction. Just run it in the background and make requests to `localhost:1111/curl/<your-protected-resource>` - the proxy handles all the Cloudflare Access authentication automatically, without having to pass any headers.
 
 ## Quick Start
 
@@ -31,13 +31,13 @@ pnpm proxy
 ### Basic GET Request
 
 ```bash
-curl "http://localhost:1111/curl?url=https://your-protected-api.com/endpoint"
+curl "http://localhost:1111/curl/https://your-protected-api.com/endpoint"
 ```
 
 ### POST Request with JSON Body
 
 ```bash
-curl -X POST "http://localhost:1111/curl?url=https://your-protected-api.com/endpoint" \
+curl -X POST "http://localhost:1111/curl/https://your-protected-api.com/endpoint" \
   -H "Content-Type: application/json" \
   -d '{"key": "value"}'
 ```
@@ -47,7 +47,7 @@ curl -X POST "http://localhost:1111/curl?url=https://your-protected-api.com/endp
 ```javascript
 // Instead of dealing with Cloudflare Access tokens
 const response = await fetch(
-  "http://localhost:1111/curl?url=https://your-protected-api.com/data"
+  "http://localhost:1111/curl/https://your-protected-api.com/data"
 );
 const data = await response.json();
 ```

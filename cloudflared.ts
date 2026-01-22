@@ -128,7 +128,7 @@ function extractUrl(req: IncomingMessage): string | null {
   if (!req.url) return null;
 
   const fullUrl = new URL(req.url, `http://localhost:${config.port}`);
-  let targetUrl = fullUrl.searchParams.get("url");
+  let targetUrl = fullUrl.href.split("/curl/", 2)[1];
   if (targetUrl) {
     try {
       const url = new URL(targetUrl);
@@ -305,7 +305,7 @@ function requestListener(req: IncomingMessage, res: ServerResponse): void {
     handleHealth(res);
   } else {
     res.writeHead(404, { "Content-Type": TEXT_HEADER });
-    res.end("Not Found - Use /curl?url=<target_url> or /health");
+    res.end("Not Found - Use /curl/<target_url> or /health");
   }
 }
 
@@ -316,11 +316,9 @@ server.listen(config.port, () => {
   console.log(
     `✅ Cloudflared Proxy running on http://localhost:${config.port}`
   );
+  console.log(`   Usage: http://localhost:${config.port}/curl/<target_url>`);
   console.log(
-    `   Usage: http://localhost:${config.port}/curl?url=<target_url>`
-  );
-  console.log(
-    `   Example: http://localhost:${config.port}/curl?url=https://example.com/api`
+    `   Example: http://localhost:${config.port}/curl/https://example.com/api`
   );
 });
 
